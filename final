@@ -1,0 +1,140 @@
+import DataFile
+import Data.List
+
+
+-- (1) wordToken
+wordToken :: String -> [String]
+wordToken "" = [] 
+wordToken x = words (addtempspace x)
+
+addtempspace "" = ""
+addtempspace x = if  head x `elem` punct then " " ++ [head x] ++ addtempspace (tail x)
+						else  [head x] ++ addtempspace (tail x)
+
+--------------------------------------------------------------------------------------
+
+
+--(2) wordTokenList
+wordTokenList :: [String] -> [String]
+wordTokenList [] = []
+wordTokenList [a] = words a
+wordTokenList (a:ax) =  wordToken a  ++ wordTokenList ax
+
+
+----------------------------------------------------------------------------------------
+
+
+--(3) uniqueBigrams
+uniqueBigrams :: [String] -> [(String,String)]
+ 
+uniqueBigrams (a:ax) = nub (biagramzipping (a:ax))
+biagramzipping [] = []
+biagramzipping (a:ax) = zip [a] ax ++ biagramzipping ax 
+
+----------------------------------------------------------------------------------------
+
+--(4) uniqueTrigrams
+uniqueTrigrams :: [String] -> [(String,String,String)]
+
+uniqueTrigrams (a:s:ax) = nub (trigramzipping (a:s:ax))
+trigramzipping (a:s:[]) = []
+trigramzipping (a:s:ax) = zip3 [a] [s] ax ++ trigramzipping (s:ax) 
+
+----------------------------------------------------------------------------------------
+
+
+--(5) bigramsFreq
+
+
+frequancy :: (Num a, Eq b) => b -> [b] -> a
+frequancy _ [] = 0
+frequancy x list = sum $ map (\a -> 1) $ filter (== x) list
+
+bialistfreq :: (Eq a, Num b) => [a] -> [a] -> [(a,b)]
+bialistfreq [] _ = []
+bialistfreq (x:xs) list = [(x, frequancy x list)] ++ bialistfreq xs list
+
+
+bigramsFreq :: Num a => [[Char]] -> [((String,String),a)]
+bigramsFreq [] = []
+bigramsFreq list = bialistfreq (uniqueBigrams list) (biagramzipping list)
+
+
+
+-----------------------------------------------------------------------------------------
+--(6) trigramsFreq
+
+
+trigramsFreq :: Num a => [[Char]] -> [((String,String,String),a)]
+trigramsFreq [] = []
+trigramsFreq (d:dt) = triolistfreq (uniqueTrigrams (d:dt)) (trigramzipping (d:dt))
+
+triolistfreq :: (Eq a, Num b) => [a] -> [a] -> [(a,b)]
+triolistfreq [] (s:sx)= []
+triolistfreq (x:xs) (s:sx) = [(x, frequancy x (s:sx))] ++ triolistfreq xs (s:sx)
+
+
+-------------------------------------------------------------------------------------------
+
+
+--(7) getFreq
+getFreq :: (Eq a, Num b) => a -> [(a,b)] -> b
+getFreq y [] = 0
+getFreq y ((z,r):dt) = if  y==z then r 
+                     else  getFreq y dt 
+
+
+
+--------------------------------------------------------------------------------------------
+--(8) generateOneProb
+
+generateOneProb :: Fractional a => ((String,String,String),a) -> [((String,String),a)] -> a
+generateOneProb ((a,b,c),r) [] = 0
+generateOneProb ((a,b,c),r) (s:sx) = r / (getFreq (a,b) (s:sx))
+
+
+----------------------------------------------------------------------------------------------
+--(9) genProbPairs
+genProbPairs :: Fractional a => [((String,String,String),a)] -> [((String,String),a)] -> [((String,String,String),a)]
+genProbPairs [] list = [] 
+genProbPairs (((a,b,c),r):xs) list = [((a,b,c), generateOneProb ((a,b,c),r) list)] ++ genProbPairs xs list
+
+
+--------------------------------------------------------------------------------------------------------
+
+--(10) generateNextWord
+
+
+generateNextWord :: (Ord a, Fractional a) => [String] -> [((String,String,String),a)] -> String
+
+
+generateNextWord [a,b] (x:xs) = if generateList [a,b] (x:xs) == [] then "Sorry, it is not possible to infer from current database"
+                               else  atIndex (randomZeroToX (length(generateList [a,b] (x:xs))-1)) (generateList [a,b] (x:xs))
+							   
+
+
+generateList [a,b] [] = []
+generateList [a,b] (((c,d,e),r):t) = if a==c && b==d && r>0.03  then [e] ++ generateList [a,b] t 
+                                     else generateList [a,b] t
+
+
+
+atIndex :: Int -> [a] -> a
+atIndex _ [] = error "Empty List!"
+atIndex y (x:xs)  | y <= 0 = x
+                 | otherwise = atIndex (y-1) xs
+
+
+--------------------------------------------------------------------------------------------------
+
+--(11)generateText
+
+generateText :: String -> Int -> String
+generateText listofwords n = listofwords ++ " " ++ generatesentence listofwords n 
+
+
+
+generatesentence listofwords 0 = ""
+generatesentence listofwords x = if x>0 then (generatehelper (wordToken listofwords) (wordToken (atIndex (randomZeroToX (length docs)-1) docs ))) ++ " " ++ generatesentence listofwords (x-1)
+                                 else  error "ERROR!"
+generatehelper listofwords text = generateNextWord (listofwords) (genProbPairs (trigramsFreq text) (bigramsFreq text))
